@@ -21,7 +21,7 @@ terminate.
 Introduction
 ------------
 
-**corun** is a coroutine-based Python library that uses only built-in Python 
+**corun** is a coroutine based Python library that uses only built-in Python 
 features to provide a low-level event driven programming model to be used when 
 you can't scale a very common thread based approach to 10K+ concurrently 
 running threads. Its also the case that the tasks being done by those threads is 
@@ -44,7 +44,7 @@ Requirements
 Installation
 ------------
 
-pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
+   pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
 
 Usage Examples
 --------------
