@@ -18,8 +18,7 @@ put coroutines to sleep for sometime and came up with a solution similar to the
 solution presented by David on how to make a task wait for another task to 
 terminate.
 
-Introduction
-------------
+Introduction ------------
 
 **corun** is a coroutine based Python library that uses only built-in Python 
 features to provide a low-level event driven programming model to be used when 
@@ -44,10 +43,59 @@ Requirements
 Installation
 ------------
 
-   pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
+	pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
 
 Usage Examples
 --------------
 
 For examples have a look at the tests folder. I will add more samples to this 
 README in the near future which will describe different ways of using corun.
+
+Performance Stats
+-----------------
+
+You can easily run the built-in tests by issuing:
+
+	python setup.py test
+
+on a freshly checked out copy and you'll get results similar to the following:
+
+	test_corun (tests.concurrent_task_test.ConcurrenTaskTest) ... 
+	corun time:	0.269580 10000
+	ok
+	test_gevent (tests.concurrent_task_test.ConcurrenTaskTest) ... 
+	gevent time:	0.497005 10000
+	ok
+	test_thread (tests.concurrent_task_test.ConcurrenTaskTest) ... 
+	thread time:	1.338474 10000
+	ok
+	test_corun (tests.io_task_test.IOTaskTest) ... 
+	corun time:	0.289584 100
+	ok
+	test_gevent (tests.io_task_test.IOTaskTest) ... 
+	gevent time:	3.748089 100
+	ok
+	test_thread (tests.io_task_test.IOTaskTest) ... 
+	thread time:	1.230650 100
+	ok
+	Starting tests in 3 seconds...
+	concurrent connection limit is 2048
+	listening at localhost:9999
+	test_1_thread (tests.urlfetch_test.URLFetchTest) ... 
+	thread time:	4.171722 1000
+	ok
+	test_2_corun (tests.urlfetch_test.URLFetchTest) ... 
+	corun time:	0.450275 1000
+	ok
+	test_3_gevent (tests.urlfetch_test.URLFetchTest) ... 
+	gevent time:	0.489684 1000
+	ok
+
+	----------------------------------------------------------------------
+	Ran 9 tests in 17.363s
+
+	OK
+
+The results of my tests are pretty impressive but I realize this library still
+needs a few features and may certainly have situations where it does not 
+outperform the other two approaches.
