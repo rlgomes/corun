@@ -36,7 +36,6 @@ and their google code project hasn't been touched in 2 years and even pip or
 easy_install couldn't find some dependencies when trying to install. So I'm 
 assuming that the code is unmaintained and an abadoned project at this point.
 
-
 Requirements
 ------------
 
@@ -45,7 +44,10 @@ Requirements
 Installation
 ------------
 
+pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
 
 Usage Examples
 --------------
 
+For examples have a look at the tests folder. I will add more samples to this 
+README in the near future which will describe different ways of using corun.
