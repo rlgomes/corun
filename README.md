@@ -18,7 +18,8 @@ put coroutines to sleep for sometime and came up with a solution similar to the
 solution presented by David on how to make a task wait for another task to 
 terminate.
 
-Introduction ------------
+Introduction
+------------
 
 **corun** is a coroutine based Python library that uses only built-in Python 
 features to provide a low-level event driven programming model to be used when 
