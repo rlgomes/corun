@@ -118,7 +118,7 @@ class ReadTask(SystemCall):
         
     def handle(self, scheduler, task):
         """
-        places the current task into the io_waiting queue
+        places the current task into the read_waiting queue
         """
         fdesc = self.fileobj.fileno()
         scheduler.wait_for_read(task, fdesc)
@@ -133,7 +133,7 @@ class WriteTask(SystemCall):
         
     def handle(self, scheduler, task):
         """
-        places the current task into the io_waiting queue
+        places the current task into the write_waiting queue
         """
         fdesc = self.fileobj.fileno()
         scheduler.wait_for_write(task, fdesc) 
@@ -152,9 +152,11 @@ class Scheduler(threading.Thread):
         self.taskmap = {}
         self.exit_waiting = {}
         
-        self.io_waiting = {}
-        self.time_waiting = {}
+        self.write_waiting = {}
+        self.read_waiting = {}
         self.epoll = select.epoll()
+        
+        self.time_waiting = {}
         
         self.running = True
         threading.Thread.start(self)
@@ -172,7 +174,8 @@ class Scheduler(threading.Thread):
     
     def wait_for_time(self, task, exptime):
         """
-        blah blah
+        add the current task to the time waiting queue which is checked by the 
+        __time_poll_task task
         """
         if not exptime in self.time_waiting.keys():
             self.time_waiting[exptime] = []
@@ -181,21 +184,28 @@ class Scheduler(threading.Thread):
     
     def wait_for_read(self, task, fdesc):
         """
-        blah blah
+        setup the required polling mechanism for read waiting
         """
-        self.io_waiting[fdesc] = task
-        self.epoll.register(fdesc, select.EPOLLIN)
+        if fdesc in self.write_waiting:
+            self.epoll.modify(fdesc, select.EPOLLOUT | select.EPOLLIN)
+        else:
+            self.epoll.register(fdesc, select.EPOLLIN)
+        self.read_waiting[fdesc] = task
 
     def wait_for_write(self, task, fdesc):
         """
-        blah blah
+        setup the required polling mechanism for write waiting
         """
-        self.io_waiting[fdesc] = task
-        self.epoll.register(fdesc, select.EPOLLOUT)
+        if fdesc in self.read_waiting:
+            self.epoll.modify(fdesc, select.EPOLLIN | select.EPOLLOUT)
+        else:
+            self.epoll.register(fdesc, select.EPOLLOUT)
+        self.write_waiting[fdesc] = task
             
     def wait_for_exit(self, task, waitid):
         """
-        blah blah
+        just add the task to the exit_waiting list that is checked on each task
+        exit
         """
         if waitid in self.taskmap:
             self.taskmap.pop(task.tid)
@@ -209,20 +219,30 @@ class Scheduler(threading.Thread):
         
     def __epoll(self, timeout):
         """
-        blah blah
+        epoll checking 
         """
         fdevents = self.epoll.poll(timeout)
             
-        for (fdesc, _) in fdevents:
-            self.ready.put(self.io_waiting.pop(fdesc))
-            self.epoll.unregister(fdesc)
-            
+        for (fdesc, eventmask) in fdevents:
+            if eventmask & select.EPOLLOUT:
+                self.ready.put(self.write_waiting.pop(fdesc))
+                if fdesc in self.read_waiting:
+                    self.epoll.modify(fdesc, select.EPOLLIN)
+                else:
+                    self.epoll.unregister(fdesc)
+            elif eventmask & select.EPOLLIN:
+                self.ready.put(self.read_waiting.pop(fdesc))
+                if fdesc in self.write_waiting:
+                    self.epoll.modify(fdesc, select.EPOLLOUT)
+                else:
+                    self.epoll.unregister(fdesc)
+                    
     def __io_epoll_task(self): 
         """
         epoll task that checks if currently awaiting io tasks can be dispatched
         """
         while True:
-            if self.io_waiting != {}:
+            if self.read_waiting != {} or self.write_waiting != {}:
                 if not(self.ready):
                     self.__epoll(-1)
                 else:

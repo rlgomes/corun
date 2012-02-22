@@ -25,7 +25,7 @@ import corun
 global counter 
 counter = 0
 
-iterations = 1000
+iterations = 500
 host = "localhost"
 port = 9999
 
