@@ -159,7 +159,7 @@ class Scheduler(threading.Thread):
         self.time_waiting = {}
         
         self.running = True
-        threading.Thread.start(self)
+        self.start()
         
     def new(self, target):
         """
@@ -243,8 +243,9 @@ class Scheduler(threading.Thread):
         """
         while True:
             if self.read_waiting != {} or self.write_waiting != {}:
-                if not(self.ready):
-                    self.__epoll(-1)
+                if self.ready.empty():
+                    # we don't want wait indefinitely but instead just 1s
+                    self.__epoll(1)
                 else:
                     self.__epoll(0)
             yield
@@ -291,7 +292,7 @@ class Scheduler(threading.Thread):
     def run(self):
         self.new(self.__io_epoll_task())
         self.new(self.__time_poll_task())
-
+        
         while self.running:
             task = self.ready.get()
             
@@ -311,6 +312,7 @@ class Scheduler(threading.Thread):
                     for other in others:
                         self.taskmap[other.tid] = other
                         self.ready.put(other)
+
 def sleep(seconds):
     """
     wait for the specified amount of time before proceeding and allow the corun

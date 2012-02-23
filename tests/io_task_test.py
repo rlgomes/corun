@@ -64,8 +64,8 @@ class IOTaskTest(unittest.TestCase):
     def test_corun(self):
         global counter
         counter = 0
-        scheduler = corun.Scheduler()
         start = time.time()
+        scheduler = corun.Scheduler()
         tids = []
         for _ in range(0,self.iterations):
             tids.append(scheduler.new(coruntestfunc()))

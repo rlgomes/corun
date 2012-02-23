@@ -83,15 +83,13 @@ class URLFetchTest(unittest.TestCase):
     
     @classmethod
     def setUpClass(self):
-        self.server = threading.Thread(target=start_web_server,args=(host,port))
-        self.server.start()
-        print("Starting tests in 3 seconds...")
-        time.sleep(3)
+        corun_server.start_server(host, port)
+        print("Starting tests in 2 seconds...")
+        time.sleep(2)
         
     @classmethod
     def tearDownClass(self):
         corun_server.shutdown()
-        self.server.join()
  
     def test_1_thread(self):
         global counter
@@ -140,9 +138,6 @@ class URLFetchTest(unittest.TestCase):
             
         print("\ngevent time:\t%f %d" % (elapsed, counter))
 
-def start_web_server(host, port):
-    corun_server.start_server(host, port)
-            
 if __name__ == '__main__':
     unittest.main()
     

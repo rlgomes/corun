@@ -9,17 +9,17 @@ import resource
 
 CANNED_RESPONSE = """HTTP/1.0 200 OK\r
 Server: CorunServer\r
-Content-Length: 0\r
-\n\r\n\r
+Content-Length: 0\r \n\r\n\r
 """
 
 __SERVER_SOCKET = None
 __SERVER_RUNNING = True
+__SCHEDULER = None
 
 def shutdown():
     global __SERVER_SOCKET, __SERVER_RUNNING
     __SERVER_RUNNING = False
-    __SERVER_SOCKET.close()
+    __SCHEDULER.shutdown()
     
 def server_client(client):
     yield corun.ReadTask(client)
@@ -29,8 +29,8 @@ def server_client(client):
     client.send(CANNED_RESPONSE)
     
     client.close()
-    
-def start_server(host,port):
+
+def server_task(host,port):
     global __SERVER_SOCKET, __SERVER_RUNNING
     
     rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -42,18 +42,21 @@ def start_server(host,port):
     __SERVER_SOCKET.listen(1024)
         
     print("listening at %s:%d" % (host,port))
-    scheduler = corun.Scheduler()
     
-    try:
-        __SERVER_SOCKET.settimeout(2)
-        while __SERVER_RUNNING:
-            try:
-                client, _ = __SERVER_SOCKET.accept()
-                scheduler.new(server_client(client))
-            except socket.timeout:
-                pass
-    finally:
-        scheduler.shutdown()
+    __SERVER_SOCKET.settimeout(2)
+    socket_timeout = socket.timeout
+    while __SERVER_RUNNING:
+        try:
+            yield corun.ReadTask(__SERVER_SOCKET)
+            client, _ = __SERVER_SOCKET.accept()
+            __SCHEDULER.new(server_client(client))
+        except socket_timeout:
+            pass
+
+def start_server(host,port):    
+    global __SCHEDULER
+    __SCHEDULER = corun.Scheduler()
+    __SCHEDULER.new(server_task(host,port))
     
 if __name__ == "__main__":
     start_server("localhost",9999)
