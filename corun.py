@@ -100,12 +100,7 @@ class WaitForTime(SystemCall):
         handle the scheduling of when this task should be scheduled back into 
         the normal corun execution
         """
-        # the idea here is that if the amount of time to sleep is in the 
-        # millisecond range then we shouldn't be calculating the time to wake 
-        # this task in more than milliseconds
-        resolution = 1.0 / self.seconds
         exptime = time.time() + self.seconds
-        exptime = int(exptime * resolution) / resolution
         scheduler.wait_for_time(task, exptime)
 
 class ReadTask(SystemCall):
@@ -242,12 +237,7 @@ class Scheduler(threading.Thread):
         epoll task that checks if currently awaiting io tasks can be dispatched
         """
         while True:
-            if self.read_waiting != {} or self.write_waiting != {}:
-                if self.ready.empty():
-                    # we don't want wait indefinitely but instead just 1s
-                    self.__epoll(1)
-                else:
-                    self.__epoll(0)
+            self.__epoll(0)
             yield
    
     def __time_poll_task(self):
@@ -295,7 +285,6 @@ class Scheduler(threading.Thread):
         
         while self.running:
             task = self.ready.get()
-            
             try:
                 result = task.run()
                 
@@ -312,11 +301,3 @@ class Scheduler(threading.Thread):
                     for other in others:
                         self.taskmap[other.tid] = other
                         self.ready.put(other)
-
-def sleep(seconds):
-    """
-    wait for the specified amount of time before proceeding and allow the corun
-    scheduler to handle other coroutines
-    """
-    yield WaitForTime(seconds)
- 

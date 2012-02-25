@@ -17,17 +17,17 @@ counter = 0
 
 def testfunc():
     global counter
-    time.sleep(0.01)
+    time.sleep(1)
     counter += 1
 
 def geventfunc():
     global counter
-    gevent.sleep(0.01)
+    gevent.sleep(1)
     counter += 1
 
 def coruntestfunc():
     global counter
-    yield corun.sleep(0.01)
+    yield corun.WaitForTime(1)
     counter += 1
 
 class ConcurrenTaskTest(unittest.TestCase):
