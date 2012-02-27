@@ -27,7 +27,7 @@ class Task(object):
         self.tid = self.__hash__()
         self.target = target
         self.sendval = None
-        
+
     def run(self):
         """
         runs the task by sending the current sendval to the target generator 
@@ -56,7 +56,7 @@ class KillTask(SystemCall):
     def __init__(self, tid):
         SystemCall.__init__(self)
         self.tid = tid
-        
+
     def handle(self, scheduler, task):
         """
         handle the killing of the specified task
@@ -68,7 +68,7 @@ class KillTask(SystemCall):
         else:
             task.sendval = False
         scheduler.ready.put(task)    
-        
+
 class WaitForTask(SystemCall):
     """
     System call to wait for another Task to end
@@ -76,7 +76,7 @@ class WaitForTask(SystemCall):
     def __init__(self, tid):
         SystemCall.__init__(self)
         self.tid = tid
-        
+
     def handle(self, scheduler, task):
         """
         handle the waiting for the specified task
@@ -125,7 +125,7 @@ class WriteTask(SystemCall):
     def __init__(self, fileobj):
         SystemCall.__init__(self)
         self.fileobj = fileobj
-        
+
     def handle(self, scheduler, task):
         """
         places the current task into the write_waiting queue
@@ -139,42 +139,45 @@ class Scheduler(threading.Thread):
     scheduling new tasks into the corun environment to handling that all dead
     tasks are correctly cleaned up after wards.
     """
-    
+
     def __init__(self):
         threading.Thread.__init__(self)
-        
+
         self.ready = Queue()
         self.taskmap = {}
         self.exit_waiting = {}
-        
+
         self.write_waiting = {}
         self.read_waiting = {}
+
         self.epoll = select.epoll()
+        self.epoll_wait_time = 0.1
         
         self.time_waiting = {}
-        
+
         self.running = True
         self.start()
-        
-    def new(self, target):
+
+    def new(self, target, name=None):
         """
         takes the target function which should be a generator and puts it into 
         the corun scheduler to be executed as soon as possible.
         """
         newtask = Task(target)
+        newtask.name = name
         self.taskmap[newtask.tid] = newtask
         # schedule this task now!
         self.ready.put(newtask)
         return newtask.tid
-    
+
     def wait_for_time(self, task, exptime):
         """
         add the current task to the time waiting queue which is checked by the 
         __time_poll_task task
         """
-        if not exptime in self.time_waiting.keys():
+        if not exptime in self.time_waiting:
             self.time_waiting[exptime] = []
-            
+
         self.time_waiting[exptime].append(task)
     
     def wait_for_read(self, task, fdesc):
@@ -204,7 +207,7 @@ class Scheduler(threading.Thread):
         """
         if waitid in self.taskmap:
             self.taskmap.pop(task.tid)
-            if waitid in self.exit_waiting.keys():
+            if waitid in self.exit_waiting:
                 self.exit_waiting[waitid].append(task)
             else:
                 self.exit_waiting[waitid] = [task]   
@@ -217,7 +220,7 @@ class Scheduler(threading.Thread):
         epoll checking 
         """
         fdevents = self.epoll.poll(timeout)
-            
+                
         for (fdesc, eventmask) in fdevents:
             if eventmask & select.EPOLLOUT:
                 self.ready.put(self.write_waiting.pop(fdesc))
@@ -231,15 +234,19 @@ class Scheduler(threading.Thread):
                     self.epoll.modify(fdesc, select.EPOLLOUT)
                 else:
                     self.epoll.unregister(fdesc)
-                    
+
     def __io_epoll_task(self): 
         """
         epoll task that checks if currently awaiting io tasks can be dispatched
         """
         while True:
-            self.__epoll(0)
+            if self.ready.qsize() == 0:
+                # nothing else to do then lets do a "long" wait
+                self.__epoll(self.epoll_wait_time)
+            else:
+                self.__epoll(0)
             yield
-   
+
     def __time_poll_task(self):
         """
         internal task that basically polls for tasks that are suppose to 
@@ -252,6 +259,12 @@ class Scheduler(threading.Thread):
                     tasks = self.time_waiting.pop(exptime)
                     for task in tasks:
                         self.ready.put(task)
+                else:
+                    # try to correct the epoll_wait_time so we can get back to 
+                    # take care of timed tasks quicker
+                    dtime = exptime - time.time()
+                    if dtime < self.epoll_wait_time and dtime > 0:
+                        self.epoll_wait_time = dtime
             yield
             
     def wait_for_tasks(self, coroutines, event): 
@@ -259,8 +272,10 @@ class Scheduler(threading.Thread):
         built-in scheduler task that waits for all of the coroutines identified
         before finishing
         """
+        count = 0
         for tid in coroutines:
             if tid in self.taskmap:
+                count+=1
                 yield WaitForTask(tid)
         event.set()
            
@@ -271,33 +286,35 @@ class Scheduler(threading.Thread):
         event = threading.Event()
         self.new(self.wait_for_tasks(coroutines, event))
         event.wait()
-    
+
     def shutdown(self):
         """
         tell the corun scheduler to shutdown 
         """
         self.running = False
         self.join()
-        
+
     def run(self):
-        self.new(self.__io_epoll_task())
-        self.new(self.__time_poll_task())
-        
+        self.new(self.__io_epoll_task(),"epoll")
+        self.new(self.__time_poll_task(), "tpoll")
+
         while self.running:
             task = self.ready.get()
+
             try:
                 result = task.run()
-                
+
                 if isinstance(result, SystemCall):
                     result.handle(self, task)
                 else:
                     self.ready.put(task)
             except StopIteration:
                 del self.taskmap[task.tid]
-            
+
                 # notify others of exit
-                if task.tid in self.exit_waiting.keys():
+                if task.tid in self.exit_waiting:
                     others = self.exit_waiting.pop(task.tid)
                     for other in others:
                         self.taskmap[other.tid] = other
                         self.ready.put(other)
+                        
