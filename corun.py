@@ -8,8 +8,9 @@ the coroutine approach may not perform as well as a regular threaded model
 would.
 """
 
-import threading
 import select
+import heapq
+import threading
 import time
 
 from Queue import Queue
@@ -153,7 +154,7 @@ class Scheduler(threading.Thread):
         self.epoll = select.epoll()
         self.epoll_wait_time = 0.1
         
-        self.time_waiting = {}
+        self.time_waiting_heap = []
 
         self.running = True
         self.start()
@@ -175,10 +176,10 @@ class Scheduler(threading.Thread):
         add the current task to the time waiting queue which is checked by the 
         __time_poll_task task
         """
-        if not exptime in self.time_waiting:
-            self.time_waiting[exptime] = []
-
-        self.time_waiting[exptime].append(task)
+#        if not exptime in self.time_waiting:
+#            self.time_waiting[exptime] = []
+#        self.time_waiting[exptime].append(task)
+        heapq.heappush(self.time_waiting_heap,(exptime,task))
     
     def wait_for_read(self, task, fdesc):
         """
@@ -254,17 +255,16 @@ class Scheduler(threading.Thread):
         """
         while True:
             current_time = time.time()
-            for exptime in self.time_waiting.keys():
-                if exptime <= current_time:
-                    tasks = self.time_waiting.pop(exptime)
-                    for task in tasks:
-                        self.ready.put(task)
-                else:
-                    # try to correct the epoll_wait_time so we can get back to 
-                    # take care of timed tasks quicker
-                    dtime = exptime - time.time()
-                    if dtime < self.epoll_wait_time and dtime > 0:
-                        self.epoll_wait_time = dtime
+            try:
+                (exptime,task) = self.time_waiting_heap[0]
+                    
+                while exptime <= current_time:
+                    heapq.heappop(self.time_waiting_heap)
+                    self.ready.put(task)
+                    (exptime,task) = self.time_waiting_heap[0]
+            except IndexError:
+                pass
+                    
             yield
             
     def wait_for_tasks(self, coroutines, event): 
