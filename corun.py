@@ -15,6 +15,8 @@ import time
 
 from Queue import Queue
 
+__DEBUG__ = False
+
 class Task(object):
     """
     the basic unit of work with a corun environment that represents the unit of
@@ -176,9 +178,6 @@ class Scheduler(threading.Thread):
         add the current task to the time waiting queue which is checked by the 
         __time_poll_task task
         """
-#        if not exptime in self.time_waiting:
-#            self.time_waiting[exptime] = []
-#        self.time_waiting[exptime].append(task)
         heapq.heappush(self.time_waiting_heap,(exptime,task))
     
     def wait_for_read(self, task, fdesc):
@@ -189,6 +188,8 @@ class Scheduler(threading.Thread):
             self.epoll.modify(fdesc, select.EPOLLOUT | select.EPOLLIN)
         else:
             self.epoll.register(fdesc, select.EPOLLIN)
+        if __DEBUG__:
+            print("%f: w4r %s" % (time.time(), fdesc))
         self.read_waiting[fdesc] = task
 
     def wait_for_write(self, task, fdesc):
@@ -199,6 +200,8 @@ class Scheduler(threading.Thread):
             self.epoll.modify(fdesc, select.EPOLLIN | select.EPOLLOUT)
         else:
             self.epoll.register(fdesc, select.EPOLLOUT)
+        if __DEBUG__:
+            print("%f: w4w %s" % (time.time(), fdesc))
         self.write_waiting[fdesc] = task
             
     def wait_for_exit(self, task, waitid):
@@ -221,21 +224,51 @@ class Scheduler(threading.Thread):
         epoll checking 
         """
         fdevents = self.epoll.poll(timeout)
-                
+
         for (fdesc, eventmask) in fdevents:
-            if eventmask & select.EPOLLOUT:
-                self.ready.put(self.write_waiting.pop(fdesc))
+            task = None
+            if eventmask & select.EPOLLHUP or eventmask & select.EPOLLERR:
+                if __DEBUG__:
+                    print("%f: ERROR %s" % (time.time(), fdesc))
+                        
+                self.epoll.unregister(fdesc) 
+                task = None
+                    
                 if fdesc in self.read_waiting:
+                    task = self.read_waiting.pop(fdesc)
+                        
+                if fdesc in self.write_waiting:
+                    task = self.write_waiting.pop(fdesc)
+                    
+                task.sendval = False    
+                self.ready.put(task)
+            elif eventmask & select.EPOLLOUT:
+                task = self.write_waiting.pop(fdesc)
+                task.senval = True
+                        
+                if __DEBUG__:
+                    print("%f: ww.pop %s" % (time.time(), fdesc))
+                    
+                if fdesc in self.read_waiting.keys():
                     self.epoll.modify(fdesc, select.EPOLLIN)
                 else:
                     self.epoll.unregister(fdesc)
+                        
+                self.ready.put(task)
             elif eventmask & select.EPOLLIN:
-                self.ready.put(self.read_waiting.pop(fdesc))
-                if fdesc in self.write_waiting:
+                task = self.read_waiting.pop(fdesc)
+                task.sendval = True
+                        
+                if __DEBUG__:
+                    print("%f: rw.pop %s" % (time.time(), fdesc))
+                        
+                if fdesc in self.write_waiting.keys():
                     self.epoll.modify(fdesc, select.EPOLLOUT)
                 else:
                     self.epoll.unregister(fdesc)
-
+                        
+                self.ready.put(task)
+                
     def __io_epoll_task(self): 
         """
         epoll task that checks if currently awaiting io tasks can be dispatched
@@ -317,4 +350,9 @@ class Scheduler(threading.Thread):
                     for other in others:
                         self.taskmap[other.tid] = other
                         self.ready.put(other)
+            except:
+                # we don't want the scheduler to die 
+                import traceback
+                traceback.print_exc()
+                del self.taskmap[task.tid]
                         
