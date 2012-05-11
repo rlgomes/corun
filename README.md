@@ -39,12 +39,12 @@ assuming that the code is unmaintained and an abadoned project at this point.
 Requirements
 ------------
 
-   * Python 2.5+
+   * Python 3.0+
 
 Installation
 ------------
 
-	pip install -e git+git://github.com/rlgomes/corun.git#egg=corun
+	pip install -e 'git+git://github.com/rlgomes/corun.git@python3#egg=corun'
 
 Usage Examples
 --------------
