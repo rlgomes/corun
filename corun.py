@@ -1,10 +1,10 @@
 """
-corun is a coroutine-based Python library that uses only built-in Python 
-features to provide a low-level event driven programming model to be used when 
+corun is a coroutine-based Python library that uses only built-in Python
+features to provide a low-level event driven programming model to be used when
 you can't scale a very common thread based approach to 10K+ threads that need
 to concurrently cooperate on the system. Its also the case that the tasks being
 done by those threads is primarily I/O bound and not CPU bound as at that point
-the coroutine approach may not perform as well as a regular threaded model 
+the coroutine approach may not perform as well as a regular threaded model
 would.
 """
 
@@ -13,7 +13,7 @@ import heapq
 import threading
 import time
 
-from Queue import Queue
+from queue import Queue
 
 __DEBUG__ = False
 
@@ -33,7 +33,7 @@ class Task(object):
 
     def run(self):
         """
-        runs the task by sending the current sendval to the target generator 
+        runs the task by sending the current sendval to the target generator
         which is waiting a yield statement
         """
         return self.target.send(self.sendval)
@@ -41,13 +41,13 @@ class Task(object):
 class SystemCall(object):
     """
     system calls are special because they allow the system to do things such as
-    wait for a given task to terminate or wait for I/O to be available on a 
+    wait for a given task to terminate or wait for I/O to be available on a
     specific socket before giving control back to the task at hand.
     """
     def handle(self, scheduler, task):
         """
         system call handler which receives the current task that this system
-        call is handling as well as the scheduler in case the system call 
+        call is handling as well as the scheduler in case the system call
         needs to interact with the scheduler.
         """
         pass
@@ -70,7 +70,7 @@ class KillTask(SystemCall):
             task.sendval = True
         else:
             task.sendval = False
-        scheduler.ready.put(task)    
+        scheduler.ready.put(task)
 
 class WaitForTask(SystemCall):
     """
@@ -86,7 +86,7 @@ class WaitForTask(SystemCall):
         """
         result = scheduler.wait_for_exit(task, self.tid)
         task.sendval = result
-        
+
         if not result:
             scheduler.ready.put(task)
 
@@ -97,10 +97,10 @@ class WaitForTime(SystemCall):
     def __init__(self, seconds):
         SystemCall.__init__(self)
         self.seconds = seconds
-        
+
     def handle(self, scheduler, task):
         """
-        handle the scheduling of when this task should be scheduled back into 
+        handle the scheduling of when this task should be scheduled back into
         the normal corun execution
         """
         exptime = time.time() + self.seconds
@@ -113,14 +113,14 @@ class ReadTask(SystemCall):
     def __init__(self, fileobj):
         SystemCall.__init__(self)
         self.fileobj = fileobj
-        
+
     def handle(self, scheduler, task):
         """
         places the current task into the read_waiting queue
         """
         fdesc = self.fileobj.fileno()
         scheduler.wait_for_read(task, fdesc)
-        
+
 class WriteTask(SystemCall):
     """
     System call to wait for the specified file descriptor to be able to write to
@@ -134,11 +134,11 @@ class WriteTask(SystemCall):
         places the current task into the write_waiting queue
         """
         fdesc = self.fileobj.fileno()
-        scheduler.wait_for_write(task, fdesc) 
+        scheduler.wait_for_write(task, fdesc)
 
 class Scheduler(threading.Thread):
     """
-    The heart of the corun module that basically handles everything from 
+    The heart of the corun module that basically handles everything from
     scheduling new tasks into the corun environment to handling that all dead
     tasks are correctly cleaned up after wards.
     """
@@ -155,7 +155,7 @@ class Scheduler(threading.Thread):
 
         self.epoll = select.epoll()
         self.epoll_wait_time = 0.1
-        
+
         self.time_waiting_heap = []
 
         self.running = True
@@ -163,7 +163,7 @@ class Scheduler(threading.Thread):
 
     def new(self, target, name=None):
         """
-        takes the target function which should be a generator and puts it into 
+        takes the target function which should be a generator and puts it into
         the corun scheduler to be executed as soon as possible.
         """
         newtask = Task(target)
@@ -175,11 +175,11 @@ class Scheduler(threading.Thread):
 
     def wait_for_time(self, task, exptime):
         """
-        add the current task to the time waiting queue which is checked by the 
+        add the current task to the time waiting queue which is checked by the
         __time_poll_task task
         """
         heapq.heappush(self.time_waiting_heap,(exptime,task))
-    
+
     def wait_for_read(self, task, fdesc):
         """
         setup the required polling mechanism for read waiting
@@ -203,7 +203,7 @@ class Scheduler(threading.Thread):
         if __DEBUG__:
             print("%f: w4w %s" % (time.time(), fdesc))
         self.write_waiting[fdesc] = task
-            
+
     def wait_for_exit(self, task, waitid):
         """
         just add the task to the exit_waiting list that is checked on each task
@@ -214,14 +214,14 @@ class Scheduler(threading.Thread):
             if waitid in self.exit_waiting:
                 self.exit_waiting[waitid].append(task)
             else:
-                self.exit_waiting[waitid] = [task]   
+                self.exit_waiting[waitid] = [task]
             return True
         else:
             return False
-        
+
     def __epoll(self, timeout):
         """
-        epoll checking 
+        epoll checking
         """
         fdevents = self.epoll.poll(timeout)
 
@@ -230,46 +230,46 @@ class Scheduler(threading.Thread):
             if eventmask & select.EPOLLHUP or eventmask & select.EPOLLERR:
                 if __DEBUG__:
                     print("%f: ERROR %s" % (time.time(), fdesc))
-                        
-                self.epoll.unregister(fdesc) 
+
+                self.epoll.unregister(fdesc)
                 task = None
-                    
+
                 if fdesc in self.read_waiting:
                     task = self.read_waiting.pop(fdesc)
-                        
+
                 if fdesc in self.write_waiting:
                     task = self.write_waiting.pop(fdesc)
-                    
-                task.sendval = False    
+
+                task.sendval = False
                 self.ready.put(task)
             elif eventmask & select.EPOLLOUT:
                 task = self.write_waiting.pop(fdesc)
                 task.senval = True
-                        
+
                 if __DEBUG__:
                     print("%f: ww.pop %s" % (time.time(), fdesc))
-                    
+
                 if fdesc in self.read_waiting.keys():
                     self.epoll.modify(fdesc, select.EPOLLIN)
                 else:
                     self.epoll.unregister(fdesc)
-                        
+
                 self.ready.put(task)
             elif eventmask & select.EPOLLIN:
                 task = self.read_waiting.pop(fdesc)
                 task.sendval = True
-                        
+
                 if __DEBUG__:
                     print("%f: rw.pop %s" % (time.time(), fdesc))
-                        
+
                 if fdesc in self.write_waiting.keys():
                     self.epoll.modify(fdesc, select.EPOLLOUT)
                 else:
                     self.epoll.unregister(fdesc)
-                        
+
                 self.ready.put(task)
-                
-    def __io_epoll_task(self): 
+
+    def __io_epoll_task(self):
         """
         epoll task that checks if currently awaiting io tasks can be dispatched
         """
@@ -283,24 +283,24 @@ class Scheduler(threading.Thread):
 
     def __time_poll_task(self):
         """
-        internal task that basically polls for tasks that are suppose to 
+        internal task that basically polls for tasks that are suppose to
         execute at an instant of time in the future.
         """
         while True:
             current_time = time.time()
             try:
                 (exptime,task) = self.time_waiting_heap[0]
-                    
+
                 while exptime <= current_time:
                     heapq.heappop(self.time_waiting_heap)
                     self.ready.put(task)
                     (exptime,task) = self.time_waiting_heap[0]
             except IndexError:
                 pass
-                    
+
             yield
-            
-    def wait_for_tasks(self, coroutines, event): 
+
+    def wait_for_tasks(self, coroutines, event):
         """
         built-in scheduler task that waits for all of the coroutines identified
         before finishing
@@ -311,7 +311,7 @@ class Scheduler(threading.Thread):
                 count+=1
                 yield WaitForTask(tid)
         event.set()
-           
+
     def joinall(self, coroutines):
         """
         wait for the specified coroutine ids to exit
@@ -322,7 +322,7 @@ class Scheduler(threading.Thread):
 
     def shutdown(self):
         """
-        tell the corun scheduler to shutdown 
+        tell the corun scheduler to shutdown
         """
         self.running = False
         self.join()
@@ -351,8 +351,7 @@ class Scheduler(threading.Thread):
                         self.taskmap[other.tid] = other
                         self.ready.put(other)
             except:
-                # we don't want the scheduler to die 
+                # we don't want the scheduler to die
                 import traceback
                 traceback.print_exc()
                 del self.taskmap[task.tid]
-                        
