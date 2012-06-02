@@ -99,4 +99,4 @@ on a freshly checked out copy and you'll get results similar to the following:
 
 The results of my tests are pretty impressive but I realize this library still
 needs a few features and may certainly have situations where it does not
-outperform the other two approaches.
+outperform the other two approache.
