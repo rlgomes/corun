@@ -69,8 +69,8 @@ class URLFetchTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         corun_server.start_server(host, port)
-        print("Starting tests in 2 seconds...")
-        time.sleep(2)
+        print("Starting tests in 5 seconds...")
+        time.sleep(5)
 
     @classmethod
     def tearDownClass(self):
