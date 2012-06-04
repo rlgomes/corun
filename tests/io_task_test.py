@@ -11,9 +11,8 @@ import unittest
 threading.stack_size(32*1024)
 
 import corun
-import gevent
 
-global counter 
+global counter
 counter = 0
 
 DATA = ''.join([ 'X' for _ in range(0,32*1024) ])
@@ -22,23 +21,16 @@ def testfunc():
     global counter
     output = open("/tmp/somefile-%d" % counter,"w")
     for _ in range(0,100):
-        output.write(DATA) 
+        output.write(DATA)
     counter += 1
 
-def geventfunc():
-    global counter
-    output = open("/tmp/somefile-%d" % counter,"w")
-    for _ in range(0,100):
-        output.write(DATA) 
-    counter += 1
-    
 def coruntestfunc():
     global counter
     output = open("/tmp/somefile-%d" % counter,"w")
     for _ in range(0,100):
-        yield output.write(DATA) 
+        yield output.write(DATA)
     counter += 1
-    
+
 class IOTaskTest(unittest.TestCase):
 
     def setUp(self):
@@ -48,7 +40,7 @@ class IOTaskTest(unittest.TestCase):
         global counter
         counter = 0
         threads = []
-        
+
         start = time.time()
         for _ in range(0,self.iterations):
             thread = threading.Thread(target=testfunc)
@@ -58,9 +50,9 @@ class IOTaskTest(unittest.TestCase):
         for i in range(0,self.iterations):
             threads[i].join()
         elapsed = time.time() - start
-        
+
         print("\nthread time:\t%f %d" % (elapsed, counter))
-        
+
     def test_corun(self):
         global counter
         counter = 0
@@ -72,20 +64,8 @@ class IOTaskTest(unittest.TestCase):
         scheduler.joinall(tids)
         scheduler.shutdown()
         elapsed = time.time() - start
-        
+
         print("\ncorun time:\t%f %d" % (elapsed, counter))
-        
-    def test_gevent(self):
-        global counter
-        counter = 0
-        jobs = []
-        start = time.time()
-        for _ in range(0,self.iterations):
-            jobs.append(gevent.spawn(geventfunc))
-        gevent.joinall(jobs)
-        elapsed = time.time() - start
-        
-        print("\ngevent time:\t%f %d" % (elapsed, counter))
-        
+
 if __name__ == '__main__':
     unittest.main()
