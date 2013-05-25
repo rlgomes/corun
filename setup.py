@@ -15,5 +15,5 @@ setup (
     py_modules = ['corun'],
     license='Apache 2.0 License',
     description='coroutine library',
-    long_description=open('README.md').read(),
+    long_description=''
 )
